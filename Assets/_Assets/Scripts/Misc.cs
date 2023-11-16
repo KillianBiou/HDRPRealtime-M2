@@ -212,7 +212,7 @@ public class Misc : MonoBehaviour
             if (targetVolume.weight == 1)
                 break;
             currentVolume.weight = Mathf.Lerp(1f, 0f, t / interpolationTime);
-            targetVolume.weight = Mathf.Lerp(0f, 0f, t / interpolationTime);
+            targetVolume.weight = Mathf.Lerp(0f, 1f, t / interpolationTime);
 
             yield return new WaitForEndOfFrame();
             t += Time.deltaTime;
