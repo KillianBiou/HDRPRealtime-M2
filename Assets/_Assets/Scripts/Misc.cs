@@ -53,6 +53,28 @@ public class Misc : MonoBehaviour
     [SerializeField]
     private Volume bloodmoonVolume;
 
+    [Header("Portrait Reference")]
+    [SerializeField]
+    private Renderer portraitReference;
+    [SerializeField]
+    private Texture2D dayBC;
+    [SerializeField]
+    private Texture2D dayNormal;
+    [SerializeField]
+    private Texture2D dayMask;
+    [SerializeField]
+    private Texture2D moonBC;
+    [SerializeField]
+    private Texture2D moonNormal;
+    [SerializeField]
+    private Texture2D moonMask;
+    [SerializeField]
+    private Texture2D bloodmoonBC;
+    [SerializeField]
+    private Texture2D bloodmoonNormal;
+    [SerializeField]
+    private Texture2D bloodmoonMask;
+
     [Header("Reference")]
     [SerializeField]
     private Light moon;
@@ -129,6 +151,7 @@ public class Misc : MonoBehaviour
         moon.GetComponent<HDAdditionalLightData>().surfaceTexture = moonTexture;
         requestBloodmoon = false;
         StartCoroutine(VolumeInterpolation(AmbianceType.BLOODMOON));
+        StartCoroutine(PortraitInterpolation(AmbianceType.BLOODMOON));
         currentType = AmbianceType.BLOODMOON;
     }
 
@@ -142,6 +165,7 @@ public class Misc : MonoBehaviour
         moon.GetComponent<HDAdditionalLightData>().surfaceTexture = moonTexture;
         requestBloodmoon = false;
         StartCoroutine(VolumeInterpolation(AmbianceType.MOON));
+        StartCoroutine(PortraitInterpolation(AmbianceType.MOON));
         currentType = AmbianceType.MOON;
     }
 
@@ -155,6 +179,7 @@ public class Misc : MonoBehaviour
         moon.GetComponent<HDAdditionalLightData>().surfaceTexture = sunTexture;
         requestBloodmoon = false;
         StartCoroutine(VolumeInterpolation(AmbianceType.DAY));
+        StartCoroutine(PortraitInterpolation(AmbianceType.DAY));
         currentType = AmbianceType.DAY;
     }
 
@@ -163,12 +188,15 @@ public class Misc : MonoBehaviour
         float baseIntensity = moon.GetComponent<HDAdditionalLightData>().intensity;
         float baseTemperature = moon.colorTemperature;
         Color baseColor = moon.GetComponent<HDAdditionalLightData>().surfaceTint;
+        Light portraitLight = portraitReference.GetComponentInChildren<Light>();
+        float portraitLightBaseTemp = portraitLight.colorTemperature;
 
         float t = 0;
         while(t < interpolationTime)
         {
             moon.GetComponent<HDAdditionalLightData>().intensity = Mathf.Lerp(baseIntensity, intensity, t / interpolationTime);
             moon.colorTemperature = Mathf.Lerp(baseTemperature, temperature, t / interpolationTime);
+            portraitLight.colorTemperature = Mathf.Lerp(portraitLightBaseTemp, temperature, t / interpolationTime);
             moon.GetComponent<HDAdditionalLightData>().surfaceTint = Color.Lerp(baseColor, color, t / interpolationTime);
             stainedGlass.GetComponent<HDAdditionalLightData>().intensity = moon.GetComponent<HDAdditionalLightData>().intensity * 10;
 
@@ -177,8 +205,57 @@ public class Misc : MonoBehaviour
         }
         moon.GetComponent<HDAdditionalLightData>().intensity = intensity;
         moon.colorTemperature = temperature;
+        portraitLight.colorTemperature = Mathf.Lerp(portraitLightBaseTemp, temperature, t / interpolationTime);
         moon.GetComponent<HDAdditionalLightData>().surfaceTint = color;
         stainedGlass.GetComponent<HDAdditionalLightData>().intensity = intensity * 10;
+
+        yield return null;
+    }
+
+    private IEnumerator PortraitInterpolation(AmbianceType newType)
+    {
+        Material mat = portraitReference.material;
+        Texture2D newBC = dayBC;
+        Texture2D newMask = dayMask;
+        Texture2D newNormal = dayNormal;
+
+        switch (newType)
+        {
+            case AmbianceType.MOON:
+                newBC = moonBC;
+                newMask = moonMask;
+                newNormal = moonNormal;
+                break;
+            case AmbianceType.BLOODMOON:
+                newBC = bloodmoonBC;
+                newMask = bloodmoonMask;
+                newNormal = bloodmoonNormal;
+                break;
+        }
+
+        float t = 0;
+        while (t < interpolationTime / 2f)
+        {
+            mat.SetFloat("_Fade", Mathf.Lerp(1f, 0f, t / (interpolationTime / 2f)));
+
+            yield return new WaitForEndOfFrame();
+            t += Time.deltaTime;
+        }
+        mat.SetFloat("_Fade", 0);
+
+        mat.SetTexture("_MainTex", newBC);
+        mat.SetTexture("_Normals", newNormal);
+        mat.SetTexture("_Mask", newMask);
+
+        t = 0;
+        while (t < interpolationTime / 2f)
+        {
+            mat.SetFloat("_Fade", Mathf.Lerp(0f, 1f, t / (interpolationTime / 2f)));
+
+            yield return new WaitForEndOfFrame();
+            t += Time.deltaTime;
+        }
+        mat.SetFloat("_Fade", 1);
 
         yield return null;
     }
