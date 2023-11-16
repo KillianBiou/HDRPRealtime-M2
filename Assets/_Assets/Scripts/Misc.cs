@@ -4,9 +4,16 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 
+public enum AmbianceType
+{
+    DAY,
+    MOON,
+    BLOODMOON
+};
+
 public class Misc : MonoBehaviour
 {
-    [Header("Global Ambiance")]
+    [Header("Base Moon Ambiance")]
     [SerializeField]
     private float baseMoonIntensity;
     [SerializeField]
@@ -15,6 +22,8 @@ public class Misc : MonoBehaviour
     private float baseMoonTemperature;
     [SerializeField]
     private float baseMoonSize;
+
+    [Header("Blood Moon Ambiance")]
     [SerializeField]
     private float bloodMoonIntensity;
     [SerializeField]
@@ -41,14 +50,20 @@ public class Misc : MonoBehaviour
     private Volume sunVolume;
     [SerializeField]
     private Volume moonVolume;
+    [SerializeField]
+    private Volume bloodmoonVolume;
 
     [Header("Reference")]
     [SerializeField]
     private Light moon;
     [SerializeField]
-    private Texture moonTexture;
+    private Light stainedGlass;
     [SerializeField]
-    private Texture sunTexture;
+    private Texture2D moonTexture;
+    [SerializeField]
+    private Texture2D sunTexture;
+    [SerializeField]
+    private Volume postProcessStack;
 
     [SerializeField]
     private string appName;
@@ -57,9 +72,12 @@ public class Misc : MonoBehaviour
 
     private bool requestBloodmoon;
 
+    private AmbianceType currentType;
+
     private void Start()
     {
         instance = this;
+        currentType = AmbianceType.DAY;
     }
 
     private void Update()
@@ -104,69 +122,103 @@ public class Misc : MonoBehaviour
     public void RequestBloodMoon()
     {
         UnityEngine.Debug.Log("Bloodmoon");
-        moon.colorTemperature = bloodMoonTemperature;
-        moon.intensity = bloodMoonIntensity;
-        moon.GetComponent<HDAdditionalLightData>().surfaceTint = bloodMoonColor;
+
+        StartCoroutine(LightInterpolation(bloodMoonIntensity, bloodMoonTemperature, bloodMoonColor));
+
         moon.GetComponent<HDAdditionalLightData>().angularDiameter = bloodMoonSize;
+        moon.GetComponent<HDAdditionalLightData>().surfaceTexture = moonTexture;
         requestBloodmoon = false;
-        StartCoroutine(VolumeInterpolation(true));
+        StartCoroutine(VolumeInterpolation(AmbianceType.BLOODMOON));
+        currentType = AmbianceType.BLOODMOON;
     }
 
     public void RequestNormalMoon()
     {
         UnityEngine.Debug.Log("Normal Moon");
-        moon.colorTemperature = baseMoonTemperature;
-        moon.intensity = baseMoonIntensity;
-        moon.GetComponent<HDAdditionalLightData>().surfaceTint = baseMoonColor;
+
+        StartCoroutine(LightInterpolation(baseMoonIntensity, baseMoonTemperature, baseMoonColor));
+
         moon.GetComponent<HDAdditionalLightData>().angularDiameter = baseMoonSize;
+        moon.GetComponent<HDAdditionalLightData>().surfaceTexture = moonTexture;
         requestBloodmoon = false;
-        StartCoroutine(VolumeInterpolation(true));
+        StartCoroutine(VolumeInterpolation(AmbianceType.MOON));
+        currentType = AmbianceType.MOON;
     }
 
     public void RequestSun()
     {
         UnityEngine.Debug.Log("Sun");
-        moon.colorTemperature = baseSunTemperature;
-        moon.intensity = baseSunIntensity;
-        moon.GetComponent<HDAdditionalLightData>().surfaceTint = baseSunColor;
+
+        StartCoroutine(LightInterpolation(baseSunIntensity, baseSunTemperature, baseSunColor));
+
         moon.GetComponent<HDAdditionalLightData>().angularDiameter = baseSunSize;
+        moon.GetComponent<HDAdditionalLightData>().surfaceTexture = sunTexture;
         requestBloodmoon = false;
-        StartCoroutine(VolumeInterpolation(false));
+        StartCoroutine(VolumeInterpolation(AmbianceType.DAY));
+        currentType = AmbianceType.DAY;
     }
 
-    public IEnumerator VolumeInterpolation(bool toNight)
+    public IEnumerator LightInterpolation(float intensity, float temperature, Color color)
     {
+        float baseIntensity = moon.GetComponent<HDAdditionalLightData>().intensity;
+        float baseTemperature = moon.colorTemperature;
+        Color baseColor = moon.GetComponent<HDAdditionalLightData>().surfaceTint;
+
         float t = 0;
         while(t < interpolationTime)
         {
-            if(toNight)
-            {
-                if (moonVolume.weight == 1)
-                    break;
-                moonVolume.weight = Mathf.Lerp(0f, 1f, t /  interpolationTime);
-                sunVolume.weight = Mathf.Lerp(1f, 0f, t /  interpolationTime);
-            }
-            else
-            {
-                if (sunVolume.weight == 1)
-                    break;
-                moonVolume.weight = Mathf.Lerp(1f, 0f, t / interpolationTime);
-                sunVolume.weight = Mathf.Lerp(0f, 0f, t / interpolationTime);
-            }
+            moon.GetComponent<HDAdditionalLightData>().intensity = Mathf.Lerp(baseIntensity, intensity, t / interpolationTime);
+            moon.colorTemperature = Mathf.Lerp(baseTemperature, temperature, t / interpolationTime);
+            moon.GetComponent<HDAdditionalLightData>().surfaceTint = Color.Lerp(baseColor, color, t / interpolationTime);
+            stainedGlass.GetComponent<HDAdditionalLightData>().intensity = moon.GetComponent<HDAdditionalLightData>().intensity * 10;
 
             yield return new WaitForEndOfFrame();
             t += Time.deltaTime;
         }
-        if (toNight)
+        moon.GetComponent<HDAdditionalLightData>().intensity = intensity;
+        moon.colorTemperature = temperature;
+        moon.GetComponent<HDAdditionalLightData>().surfaceTint = color;
+        stainedGlass.GetComponent<HDAdditionalLightData>().intensity = intensity * 10;
+
+        yield return null;
+    }
+
+    public IEnumerator VolumeInterpolation(AmbianceType newType)
+    {
+        Volume currentVolume = sunVolume;
+        switch (currentType)
         {
-            moonVolume.weight = 1;
-            sunVolume.weight = 0;
+            case AmbianceType.MOON:
+                currentVolume = moonVolume;
+                break;
+            case AmbianceType.BLOODMOON:
+                currentVolume = bloodmoonVolume;
+                break;
         }
-        else
+        Volume targetVolume = sunVolume;
+        switch (newType)
         {
-            moonVolume.weight = 0;
-            sunVolume.weight = 1;
+            case AmbianceType.MOON:
+                targetVolume = moonVolume;
+                break;
+            case AmbianceType.BLOODMOON:
+                targetVolume = bloodmoonVolume;
+                break;
         }
+
+        float t = 0;
+        while(t < interpolationTime)
+        {
+            if (targetVolume.weight == 1)
+                break;
+            currentVolume.weight = Mathf.Lerp(1f, 0f, t / interpolationTime);
+            targetVolume.weight = Mathf.Lerp(0f, 0f, t / interpolationTime);
+
+            yield return new WaitForEndOfFrame();
+            t += Time.deltaTime;
+        }
+        currentVolume.weight = 0f;
+        targetVolume.weight = 1f;
         yield return null;
     }
 }
