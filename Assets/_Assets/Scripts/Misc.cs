@@ -140,7 +140,6 @@ public class Misc : MonoBehaviour
         requestBloodmoon = true;
     }
 
-
     public void RequestBloodMoon()
     {
         UnityEngine.Debug.Log("Bloodmoon");
@@ -181,6 +180,22 @@ public class Misc : MonoBehaviour
         StartCoroutine(VolumeInterpolation(AmbianceType.DAY));
         StartCoroutine(PortraitInterpolation(AmbianceType.DAY));
         currentType = AmbianceType.DAY;
+    }
+
+    public void CycleTheme()
+    {
+        switch(currentType)
+        {
+            case AmbianceType.DAY:
+                RequestNormalMoon();
+                break;
+            case AmbianceType.MOON:
+                RequestBloodMoon();
+                break;
+            default:
+                RequestSun();
+                break;
+        }
     }
 
     public IEnumerator LightInterpolation(float intensity, float temperature, Color color)
