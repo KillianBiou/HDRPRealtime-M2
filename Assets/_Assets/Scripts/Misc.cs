@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -87,8 +88,12 @@ public class Misc : MonoBehaviour
     [SerializeField]
     private Volume postProcessStack;
 
+    [Header("Easter Egg")]
     [SerializeField]
     private string appName;
+    [SerializeField]
+    private List<KeyCode> triggerSequence;
+    private List<KeyCode> currentSequence = new List<KeyCode>();
 
     public static Misc instance;
 
@@ -104,19 +109,37 @@ public class Misc : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.E))
-            StartCastlevania();
+        if (Input.anyKeyDown)
+        {
+            foreach (KeyCode keyCode in System.Enum.GetValues(typeof(KeyCode)))
+            {
+                if (Input.GetKeyDown(keyCode))
+                {
+                    UnityEngine.Debug.Log("Key pressed: " + keyCode);
+                    currentSequence.Add(keyCode);
+                    if (currentSequence.Count > triggerSequence.Count)
+                        currentSequence.RemoveAt(0);
+                    if(currentSequence.Count == triggerSequence.Count)
+                        CheckInput();
+                    // Do something with the specific keycode
+                    break; // Break the loop after finding the pressed key
+                }
+            }
+        }
+    }
 
-        if (Input.GetKeyDown(KeyCode.I))
-            RequestSun();
-        if (Input.GetKeyDown(KeyCode.O))
-            RequestNormalMoon();
-        if (Input.GetKeyDown(KeyCode.P))
-            RequestBloodMoon();
-
-
-        if (requestBloodmoon)
-            RequestBloodMoon();
+    private void CheckInput()
+    {
+        if (currentSequence.Count == 0)
+            return;
+        for(int i = 0; i < currentSequence.Count; i++)
+        {
+            if (currentSequence[i] != triggerSequence[i])
+                return;
+        }
+        UnityEngine.Debug.Log("Trigger Sequence");
+        currentSequence.Clear();
+        StartCastlevania();
     }
 
     private void StartCastlevania()
@@ -156,13 +179,9 @@ public class Misc : MonoBehaviour
 
     public void RequestNormalMoon()
     {
-        UnityEngine.Debug.Log("Normal Moon");
-
-        StartCoroutine(LightInterpolation(baseMoonIntensity, baseMoonTemperature, baseMoonColor));
-
         moon.GetComponent<HDAdditionalLightData>().angularDiameter = baseMoonSize;
         moon.GetComponent<HDAdditionalLightData>().surfaceTexture = moonTexture;
-        requestBloodmoon = false;
+        StartCoroutine(LightInterpolation(baseMoonIntensity, baseMoonTemperature, baseMoonColor));
         StartCoroutine(VolumeInterpolation(AmbianceType.MOON));
         StartCoroutine(PortraitInterpolation(AmbianceType.MOON));
         currentType = AmbianceType.MOON;
@@ -188,13 +207,13 @@ public class Misc : MonoBehaviour
         {
             case AmbianceType.DAY:
                 RequestNormalMoon();
-                break;
+                return;
             case AmbianceType.MOON:
                 RequestBloodMoon();
-                break;
+                return;
             default:
                 RequestSun();
-                break;
+                return;
         }
     }
 
@@ -206,7 +225,7 @@ public class Misc : MonoBehaviour
         Light portraitLight = portraitReference.GetComponentInChildren<Light>();
         float portraitLightBaseTemp = portraitLight.colorTemperature;
 
-        float t = 0;
+        float t = 0f;
         while(t < interpolationTime)
         {
             moon.GetComponent<HDAdditionalLightData>().intensity = Mathf.Lerp(baseIntensity, intensity, t / interpolationTime);
@@ -215,15 +234,14 @@ public class Misc : MonoBehaviour
             moon.GetComponent<HDAdditionalLightData>().surfaceTint = Color.Lerp(baseColor, color, t / interpolationTime);
             stainedGlass.GetComponent<HDAdditionalLightData>().intensity = moon.GetComponent<HDAdditionalLightData>().intensity * 10;
 
-            yield return new WaitForEndOfFrame();
-            t += Time.deltaTime;
+            yield return new WaitForSeconds(0.1f);
+            t += 0.1f;
         }
         moon.GetComponent<HDAdditionalLightData>().intensity = intensity;
         moon.colorTemperature = temperature;
         portraitLight.colorTemperature = Mathf.Lerp(portraitLightBaseTemp, temperature, t / interpolationTime);
         moon.GetComponent<HDAdditionalLightData>().surfaceTint = color;
         stainedGlass.GetComponent<HDAdditionalLightData>().intensity = intensity * 10;
-
         yield return null;
     }
 
@@ -253,8 +271,8 @@ public class Misc : MonoBehaviour
         {
             mat.SetFloat("_Fade", Mathf.Lerp(1f, 0f, t / (interpolationTime / 2f)));
 
-            yield return new WaitForEndOfFrame();
-            t += Time.deltaTime;
+            yield return new WaitForSeconds(0.1f);
+            t += 0.1f;
         }
         mat.SetFloat("_Fade", 0);
 
@@ -267,12 +285,10 @@ public class Misc : MonoBehaviour
         {
             mat.SetFloat("_Fade", Mathf.Lerp(0f, 1f, t / (interpolationTime / 2f)));
 
-            yield return new WaitForEndOfFrame();
-            t += Time.deltaTime;
+            yield return new WaitForSeconds(0.1f);
+            t += 0.1f;
         }
         mat.SetFloat("_Fade", 1);
-
-        yield return null;
     }
 
     public IEnumerator VolumeInterpolation(AmbianceType newType)
@@ -306,11 +322,10 @@ public class Misc : MonoBehaviour
             currentVolume.weight = Mathf.Lerp(1f, 0f, t / interpolationTime);
             targetVolume.weight = Mathf.Lerp(0f, 1f, t / interpolationTime);
 
-            yield return new WaitForEndOfFrame();
-            t += Time.deltaTime;
+            yield return new WaitForSeconds(0.1f);
+            t += 0.1f;
         }
         currentVolume.weight = 0f;
         targetVolume.weight = 1f;
-        yield return null;
     }
 }
